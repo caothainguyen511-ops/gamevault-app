@@ -8,3 +8,6 @@ Android WebView wrapper for the live GameVault website: https://congdonggialap.s
 - GitHub Actions builds a debug APK and uploads it as an artifact
 
 Pushes to main trigger the build. The APK is available from the Actions run under Artifacts.
+
+
+Build trigger refresh: 2026-11-25T03:35:05.021Z
