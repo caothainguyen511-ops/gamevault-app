@@ -16,6 +16,7 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
+import android.webkit.JavascriptInterface
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -60,7 +61,25 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
         web.webChromeClient = WebChromeClient()
+        web.addJavascriptInterface(DownloadBridge(), "GameVaultNative")
         web.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                view?.evaluateJavascript("""
+                    (function() {
+                      if (window.__gvNativeDownloadHook) return;
+                      window.__gvNativeDownloadHook = true;
+                      const originalOpen = window.open;
+                      window.open = function(url) {
+                        if (url && /^https?:/i.test(String(url))) {
+                          GameVaultNative.downloadFile(String(url), document.title || 'GameVault');
+                          return null;
+                        }
+                        return originalOpen ? originalOpen.apply(this, arguments) : null;
+                      };
+                    })();
+                """.trimIndent(), null)
+            }
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val uri = request?.url ?: return false
                 val host = uri.host ?: return false
@@ -87,6 +106,18 @@ class MainActivity : Activity() {
 
     override fun onBackPressed() {
         if (web.canGoBack()) web.goBack() else super.onBackPressed()
+    }
+
+    private inner class DownloadBridge {
+        @JavascriptInterface
+        fun downloadFile(url: String, pageTitle: String) {
+            if (!url.startsWith("https://")) {
+                runOnUiThread { Toast.makeText(this@MainActivity, "Chỉ tải liên kết HTTPS", Toast.LENGTH_SHORT).show() }
+                return
+            }
+            val filename = URLUtil.guessFileName(url, null, null)
+            runOnUiThread { startDownload(url, web.settings.userAgentString, "", filename) }
+        }
     }
 
     private fun startDownload(url: String, agent: String, disposition: String, filename: String) {
